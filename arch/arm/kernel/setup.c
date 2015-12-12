@@ -2,6 +2,7 @@
  *  linux/arch/arm/kernel/setup.c
  *
  *  Copyright (C) 1995-2001 Russell King
+ *  Copyright (C) 2015 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -56,6 +57,7 @@
 #include <asm/unwind.h>
 #include <asm/memblock.h>
 #include <asm/virt.h>
+#include <asm/bootinfo.h>
 
 #include "atags.h"
 
@@ -737,6 +739,49 @@ static void __init request_standard_resources(struct machine_desc *mdesc)
 	if (mdesc->reserve_lp2)
 		request_resource(&ioport_resource, &lp2);
 }
+
+/*
+ *  Tag parsing.
+ *
+ * This is the new way of passing data to the kernel at boot time.  Rather
+ * than passing a fixed inflexible structure to the kernel, we pass a list
+ * of variable-sized tags to the kernel.  The first tag must be a ATAG_CORE
+ * tag for the list to be recognised (to distinguish the tagged list from
+ * a param_struct).  The list is terminated with a zero-length tag (this tag
+ * is not parsed in any way).
+ */
+static int __init parse_tag_core(const struct tag *tag)
+{
+	if (tag->hdr.size > 2) {
+		if ((tag->u.core.flags & 1) == 0)
+			root_mountflags &= ~MS_RDONLY;
+		ROOT_DEV = old_decode_dev(tag->u.core.rootdev);
+	}
+	return 0;
+}
+
+__tagtable(ATAG_CORE, parse_tag_core);
+
+static int __init parse_tag_mem32(const struct tag *tag)
+{
+	return arm_add_memory(tag->u.mem.start, tag->u.mem.size);
+}
+
+__tagtable(ATAG_MEM, parse_tag_mem32);
+
+#ifdef CONFIG_OF_FLATTREE
+void __init early_init_dt_setup_pureason_arch(unsigned long pu_reason)
+{
+	set_powerup_reason(pu_reason);
+	pr_info("Powerup reason=0x%x\n", get_powerup_reason());
+}
+
+void __init early_init_dt_setup_hwversion_arch(unsigned long hw_version)
+{
+	set_hw_version(hw_version);
+	pr_info("Hw version=0x%x\n", get_hw_version());
+}
+#endif /* CONFIG_OF_FLATTREE */
 
 #if defined(CONFIG_VGA_CONSOLE) || defined(CONFIG_DUMMY_CONSOLE)
 struct screen_info screen_info = {

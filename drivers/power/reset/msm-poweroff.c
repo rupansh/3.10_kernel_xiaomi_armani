@@ -1,4 +1,5 @@
 /* Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2015 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -59,7 +60,7 @@ static void *emergency_dload_mode_addr;
 static bool scm_dload_supported;
 
 static int dload_set(const char *val, struct kernel_param *kp);
-static int download_mode = 1;
+static int download_mode = 0;
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
 static int panic_prep_restart(struct notifier_block *this,
@@ -92,11 +93,6 @@ static void set_dload_mode(int on)
 	}
 
 	dload_mode_enabled = on;
-}
-
-static bool get_dload_mode(void)
-{
-	return dload_mode_enabled;
 }
 
 static void enable_emergency_dload_mode(void)
@@ -154,11 +150,6 @@ static void enable_emergency_dload_mode(void)
 {
 	pr_err("dload mode is not enabled on target\n");
 }
-
-static bool get_dload_mode(void)
-{
-	return false;
-}
 #endif
 
 void msm_set_restart_mode(int mode)
@@ -181,6 +172,77 @@ static void halt_spmi_pmic_arbiter(void)
 	}
 }
 
+static void __msm_power_off(int lower_pshold)
+{
+	printk(KERN_CRIT "Powering off the SoC\n");
+#ifdef CONFIG_MSM_DLOAD_MODE
+	set_dload_mode(0);
+#endif
+	__raw_writel(0x0, restart_reason);
+	pm8xxx_reset_pwr_off(0);
+	qpnp_pon_system_pwr_off(PON_POWER_OFF_SHUTDOWN);
+
+	if (lower_pshold) {
+		if (!use_restart_v2()) {
+			__raw_writel(0, PSHOLD_CTL_SU);
+		} else {
+			halt_spmi_pmic_arbiter();
+			__raw_writel(0, MSM_MPM2_PSHOLD_BASE);
+		}
+
+		mdelay(10000);
+		printk(KERN_ERR "Powering off has failed\n");
+	}
+	return;
+}
+
+static void msm_power_off(void)
+{
+	/* MSM initiated power off, lower ps_hold */
+	__msm_power_off(1);
+}
+
+static void cpu_power_off(void *data)
+{
+	int rc;
+
+	pr_err("PMIC Initiated shutdown %s cpu=%d\n", __func__,
+						smp_processor_id());
+	if (smp_processor_id() == 0) {
+		/*
+		 * PMIC initiated power off, do not lower ps_hold, pmic will
+		 * shut msm down
+		 */
+		__msm_power_off(0);
+
+		pet_watchdog();
+		pr_err("Calling scm to disable arbiter\n");
+		/* call secure manager to disable arbiter and never return */
+		rc = scm_call_atomic1(SCM_SVC_PWR,
+						SCM_IO_DISABLE_PMIC_ARBITER, 1);
+
+		pr_err("SCM returned even when asked to busy loop rc=%d\n", rc);
+		pr_err("waiting on pmic to shut msm down\n");
+	}
+
+	preempt_disable();
+	while (1)
+		;
+}
+
+static irqreturn_t resout_irq_handler(int irq, void *dev_id)
+{
+	pr_warn("%s PMIC Initiated shutdown\n", __func__);
+	oops_in_progress = 1;
+	smp_call_function_many(cpu_online_mask, cpu_power_off, NULL, 0);
+	if (smp_processor_id() == 0)
+		cpu_power_off(NULL);
+	preempt_disable();
+	while (1)
+		;
+	return IRQ_HANDLED;
+}
+
 static void msm_restart_prepare(const char *cmd)
 {
 #ifdef CONFIG_MSM_DLOAD_MODE
@@ -194,13 +256,12 @@ static void msm_restart_prepare(const char *cmd)
 			(in_panic || restart_mode == RESTART_DLOAD));
 #endif
 
-	/* Hard reset the PMIC unless memory contents must be maintained. */
-	if (get_dload_mode() || (cmd != NULL && cmd[0] != '\0'))
-		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
-	else
-		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
+	pm8xxx_reset_pwr_off(1);
 
-	if (cmd != NULL) {
+	qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+	if (in_panic) {
+		__raw_writel(0x77665508, restart_reason);
+	} else if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
 			__raw_writel(0x77665500, restart_reason);
 		} else if (!strncmp(cmd, "recovery", 8)) {
@@ -219,6 +280,8 @@ static void msm_restart_prepare(const char *cmd)
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
+	} else {
+		__raw_writel(0x77665501, restart_reason);
 	}
 
 	flush_cache_all();
@@ -306,26 +369,10 @@ static int msm_restart_probe(struct platform_device *pdev)
 
 	set_dload_mode(download_mode);
 #endif
-	np = of_find_compatible_node(NULL, NULL,
-				"qcom,msm-imem-restart_reason");
-	if (!np) {
-		pr_err("unable to find DT imem restart reason node\n");
-	} else {
-		restart_reason = of_iomap(np, 0);
-		if (!restart_reason) {
-			pr_err("unable to map imem restart reason offset\n");
-			ret = -ENOMEM;
-			goto err_restart_reason;
-		}
-	}
-
-	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	msm_ps_hold = devm_ioremap_resource(dev, mem);
-	if (IS_ERR(msm_ps_hold))
-		return PTR_ERR(msm_ps_hold);
-
-	pm_power_off = do_msm_poweroff;
-	arm_pm_restart = do_msm_restart;
+	msm_tmr0_base = msm_timer_get_timer0_base();
+	restart_reason = MSM_IMEM_BASE + RESTART_REASON_ADDR;
+	__raw_writel(0x77665510, restart_reason);
+	pm_power_off = msm_power_off;
 
 	if (scm_is_call_available(SCM_SVC_PWR, SCM_IO_DISABLE_PMIC_ARBITER) > 0)
 		scm_pmic_arbiter_disable_supported = true;

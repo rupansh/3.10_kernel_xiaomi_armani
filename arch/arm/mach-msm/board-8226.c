@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2015 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,6 +33,11 @@
 #include <linux/regulator/rpm-smd-regulator.h>
 #include <linux/regulator/spm-regulator.h>
 #include <linux/clk/msm-clk-provider.h>
+#include <linux/msm_tsens.h>
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#include <linux/persistent_ram.h>
+#include <linux/memblock.h>
+#endif
 #include <asm/mach/map.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/time.h>
@@ -51,6 +57,81 @@
 #include "board-dt.h"
 #include "clock.h"
 #include "platsmp.h"
+#include "spm.h"
+#include "pm.h"
+#include "modem_notifier.h"
+#include "spm-regulator.h"
+
+static struct memtype_reserve msm8226_reserve_table[] __initdata = {
+	[MEMTYPE_SMI] = {
+	},
+	[MEMTYPE_EBI0] = {
+		.flags	=	MEMTYPE_FLAGS_1M_ALIGN,
+	},
+	[MEMTYPE_EBI1] = {
+		.flags	=	MEMTYPE_FLAGS_1M_ALIGN,
+	},
+};
+
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+static struct persistent_ram_descriptor desc = {
+        .name = "ram_console",
+};
+
+static struct persistent_ram ram = {
+        .descs = &desc,
+        .num_descs = 1,
+};
+
+void __init ram_console_debug_reserve(unsigned long ram_console_size)
+{
+        int ret;
+
+        ram.start = memblock_end_of_DRAM() - ram_console_size;
+        ram.size = ram_console_size;
+        ram.descs->size = ram_console_size;
+        INIT_LIST_HEAD(&ram.node);
+
+        ret = persistent_ram_early_init(&ram);
+        if (ret) {
+                pr_err("%s:ram console persistent_ram_early_init failed\n",__func__);
+                goto fail;
+        }
+
+        return;
+
+fail:
+        pr_err("Failed to reserve memory block for ram console\n");
+}
+
+static struct resource ram_console_resources[] = {
+        {
+                .flags = IORESOURCE_MEM,
+        },
+};
+
+static struct platform_device ram_console_device = {
+        .name           = "ram_console",
+        .id             = -1,
+        .num_resources  = ARRAY_SIZE(ram_console_resources),
+        .resource       = ram_console_resources,
+};
+
+void __init ram_console_debug_init(void)
+{
+        int err;
+        err = platform_device_register(&ram_console_device);
+        if (err)
+                pr_err("%s: ram console registration failed (%d)!\n",
+                        __func__, err);
+}
+#endif
+
+static int msm8226_paddr_to_memtype(unsigned int paddr)
+{
+	return MEMTYPE_EBI1;
+}
+>>>>>>> ARM: Xiaomi changes for HM 1S
 
 static struct of_dev_auxdata msm_hsic_host_adata[] = {
 	OF_DEV_AUXDATA("qcom,hsic-host", 0xF9A00000, "msm_hsic_host", NULL),
@@ -73,7 +154,12 @@ static struct of_dev_auxdata msm8226_auxdata_lookup[] __initdata = {
 
 static void __init msm8226_reserve(void)
 {
-	of_scan_flat_dt(dt_scan_for_memory_reserve, NULL);
+	reserve_info = &msm8226_reserve_info;
+	of_scan_flat_dt(dt_scan_for_memory_reserve, msm8226_reserve_table);
+	msm_reserve();
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+	ram_console_debug_reserve(SZ_1M *2);
+#endif
 }
 
 /*
@@ -97,6 +183,11 @@ void __init msm8226_add_drivers(void)
 	ncp6335d_regulator_init();
 	fan53555_regulator_init();
 	cpr_regulator_init();
+	tsens_tm_init_driver();
+	msm_thermal_device_init();
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+	ram_console_debug_init();
+#endif
 }
 
 void __init msm8226_init(void)
