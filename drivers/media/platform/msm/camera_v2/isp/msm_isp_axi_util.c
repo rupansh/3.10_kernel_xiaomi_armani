@@ -553,11 +553,7 @@ void msm_isp_calculate_bandwidth(
 			stream_info->format_factor / ISP_Q2;
 	} else {
 		int rdi = SRC_TO_INTF(stream_info->stream_src);
-		if (rdi < VFE_SRC_MAX)
-			stream_info->bandwidth =
-				axi_data->src_info[rdi].pixel_clock;
-		else
-			pr_err("%s: Invalid rdi interface\n", __func__);
+		stream_info->bandwidth = axi_data->src_info[rdi].pixel_clock;
 	}
 }
 
@@ -933,23 +929,12 @@ static void msm_isp_process_done_buf(struct vfe_device *vfe_dev,
 	struct msm_isp_event_data buf_event;
 	struct timeval *time_stamp;
 	uint32_t stream_idx = HANDLE_TO_IDX(stream_info->stream_handle);
-	uint32_t frame_id;
-	uint32_t buf_src;
-	memset(&buf_event, 0, sizeof(buf_event));
+	uint32_t frame_id = vfe_dev->axi_data.
+		src_info[SRC_TO_INTF(stream_info->stream_src)].frame_id;
+	memset(&buf_event, 0, sizeof(buf_event) );
 
 	if (stream_idx >= MAX_NUM_STREAM) {
 		pr_err("%s: Invalid stream_idx", __func__);
-		return;
-	}
-
-	frame_id = vfe_dev->axi_data.
-		src_info[SRC_TO_INTF(stream_info->stream_src)].frame_id;
-
-	if (SRC_TO_INTF(stream_info->stream_src) >= VFE_SRC_MAX) {
-		pr_err("%s: Invalid stream index, put buf back to vb2 queue\n",
-			__func__);
-		vfe_dev->buf_mgr->ops->put_buf(vfe_dev->buf_mgr,
-			buf->bufq_handle, buf->buf_idx);
 		return;
 	}
 
@@ -1358,14 +1343,9 @@ static int msm_isp_start_axi_stream(struct vfe_device *vfe_dev,
 		}
 		stream_info = &axi_data->stream_info[
 			HANDLE_TO_IDX(stream_cfg_cmd->stream_handle[i])];
-
-		if (SRC_TO_INTF(stream_info->stream_src) < VFE_SRC_MAX)
-			src_state = axi_data->src_info[
-				SRC_TO_INTF(stream_info->stream_src)].active;
-		else {
-			pr_err("%s: invalid src info index\n", __func__);
-			return -EINVAL;
-		}
+		stream_info->frame_id = 0;
+		src_state = axi_data->src_info[
+			SRC_TO_INTF(stream_info->stream_src)].active;
 
 		msm_isp_calculate_bandwidth(axi_data, stream_info);
 		msm_isp_reset_framedrop(vfe_dev, stream_info);
