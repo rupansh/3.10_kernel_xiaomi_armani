@@ -627,7 +627,8 @@ static int qpnp_wled_set(struct qpnp_led_data *led)
 {
 	static int max_current, digital;
 	int rc, duty = 0, level, scale_ratio = WLED_SCALE_VAL;
-	u8 val, i, num_wled_strings, sink_val;
+	int tries = 0;
+	u8 val, i, num_wled_strings, sink_val, ilim_val, ovp_val;
 
 	num_wled_strings = led->wled_cfg->num_strings;
 
