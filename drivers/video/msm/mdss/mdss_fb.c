@@ -398,7 +398,7 @@ static ssize_t mdss_set_rgb(struct device *dev,
 	return -EINVAL;
 }
 
-static ssize_t mdss_fb_get_split(struct device *dev,
+static ssize_t mdss_fb_show_split(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	ssize_t ret = 0;
@@ -417,9 +417,12 @@ static void mdss_fb_get_split(struct msm_fb_data_type *mfd)
 	if (!mfd->mdss_fb_split_stored)
 		mdss_fb_parse_dt_split(mfd);
 
-	if (mfd->split_fb_left || mfd->split_fb_right)
-		pr_debug("split framebuffer left=%d right=%d\n",
-			mfd->split_fb_left, mfd->split_fb_right);
+	if ((mfd->split_mode == MDP_SPLIT_MODE_NONE) &&
+	    (mfd->split_fb_left || mfd->split_fb_right))
+		mfd->split_mode = MDP_DUAL_LM_SINGLE_DISPLAY;
+
+	pr_debug("split framebuffer left=%d right=%d mode=%d\n",
+		mfd->split_fb_left, mfd->split_fb_right, mfd->split_mode);
 }
 
 static ssize_t mdss_fb_get_thermal_level(struct device *dev,

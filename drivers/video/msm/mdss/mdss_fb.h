@@ -79,9 +79,12 @@ enum mdp_notify_event {
  * @MDP_SPLIT_MODE_LM:   Dual Display is true, Split across layer mixers
  * @MDP_SPLIT_MODE_DST:  Dual Display is true, Split is in the Destination
  *                      i.e ping pong split.
+ * #MDP_DUAL_LM_SINGLE_DISPLAY: Single physical display with signle ctl
+ *                      i.e. 1440x2560 on chipsets with single DSI interface.
  */
 enum mdp_split_mode {
 	MDP_SPLIT_MODE_NONE,
+	MDP_DUAL_LM_SINGLE_DISPLAY,
 	MDP_SPLIT_MODE_LM,
 	MDP_SPLIT_MODE_DST,
 };
