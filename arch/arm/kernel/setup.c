@@ -58,6 +58,7 @@
 #include <asm/memblock.h>
 #include <asm/virt.h>
 #include <asm/bootinfo.h>
+#include <linux/root_dev.h>
 
 #include "atags.h"
 
