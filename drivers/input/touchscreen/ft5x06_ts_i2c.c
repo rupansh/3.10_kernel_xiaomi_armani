@@ -75,7 +75,7 @@ static const struct ft5x06_bus_ops ft5x06_i2c_bops = {
 	.write   = ft5x06_i2c_write,
 };
 
-static int __devinit ft5x06_i2c_probe(struct i2c_client *client,
+static int ft5x06_i2c_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
 {
 	struct ft5x06_data *ft5x06;
@@ -94,7 +94,7 @@ static int __devinit ft5x06_i2c_probe(struct i2c_client *client,
 	return 0;
 }
 
-static int __devexit ft5x06_i2c_remove(struct i2c_client *client)
+static int ft5x06_i2c_remove(struct i2c_client *client)
 {
 	struct ft5x06_data *ft5x0x = i2c_get_clientdata(client);
 	ft5x06_remove(ft5x0x);
@@ -109,7 +109,7 @@ MODULE_DEVICE_TABLE(i2c, ft5x0x_i2c_id);
 
 static struct i2c_driver ft5x06_i2c_driver = {
 	.probe         = ft5x06_i2c_probe,
-	.remove        = __devexit_p(ft5x06_i2c_remove),
+	.remove        = ft5x06_i2c_remove,
 	.driver = {
 		.name  = "ft5x06_i2c",
 		.owner = THIS_MODULE,

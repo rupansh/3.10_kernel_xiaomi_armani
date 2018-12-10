@@ -997,6 +997,25 @@ static int fb_notifier_callback(struct notifier_block *self,
 
 	return 0;
 }
+static int ft5x06_input_disable(struct input_dev *in_dev)
+{
+	struct ft5x06_data *ft5x06 = input_get_drvdata(in_dev);
+
+	pr_info("ft5x06 disable!\n");
+	ft5x06_suspend(ft5x06);
+
+	return 0;
+}
+
+static int ft5x06_input_enable(struct input_dev *in_dev)
+{
+	struct ft5x06_data *ft5x06 = input_get_drvdata(in_dev);
+
+	pr_info("ft5x06 enable!\n");
+	ft5x06_resume(ft5x06);
+
+	return 0;
+}
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 static void ft5x06_early_suspend(struct early_suspend *h)
 {
@@ -1827,19 +1846,6 @@ struct ft5x06_data *ft5x06_probe(struct device *dev,
 		}
 	}
 
-	err = ft5x06_ts_pinctrl_init(data);
-	if (!err && data->ts_pinctrl) {
-		err = pinctrl_select_state(data->ts_pinctrl,
-					data->pinctrl_state_active);
-		if (err < 0) {
-			dev_err(&client->dev,
-				"failed to select pin to active state");
-			goto pinctrl_deinit;
-		}
-	} else {
-		goto pwr_off;
-	}
-
 	if (gpio_is_valid(pdata->irq_gpio)) {
 		error = gpio_request(pdata->irq_gpio, "ft5x06_irq_gpio");
 		if (error < 0) {
@@ -1889,7 +1895,7 @@ struct ft5x06_data *ft5x06_probe(struct device *dev,
 
 	/* init touch parameter */
 #ifdef CONFIG_TOUCHSCREEN_FT5X06_TYPEB
-	input_mt_init_slots(ft5x06->input, FT5X0X_MAX_FINGER);
+	input_mt_init_slots(ft5x06->input, FT5X0X_MAX_FINGER, 0);
 #endif
 	set_bit(ABS_MT_TOUCH_MAJOR, ft5x06->input->absbit);
 	set_bit(ABS_MT_POSITION_X, ft5x06->input->absbit);
@@ -1911,20 +1917,20 @@ struct ft5x06_data *ft5x06_probe(struct device *dev,
 	set_bit(EV_KEY, ft5x06->input->evbit);
 	set_bit(EV_ABS, ft5x06->input->evbit);
 
-	/* read chip data */
 	error = ft5x06_read_byte(ft5x06, FT5X0X_REG_CHIP_ID, &ft5x06->chip_id);
 	if (error) {
 		dev_err(dev, "failed to read chip id\n");
 		goto err_free_input;
 	}
 
-	/* load our firmware*/
 	error = ft5x06_load_firmware(ft5x06, pdata->firmware, NULL);
 	if (error) {
 		dev_err(dev, "fail to load firmware\n");
 		goto err_free_input;
 	}
 
+	ft5x06->input->enable = ft5x06_input_enable;
+	ft5x06->input->disable = ft5x06_input_disable;
 	ft5x06->input->enabled = true;
 	/* register input device */
 	error = input_register_device(ft5x06->input);
@@ -1974,12 +1980,7 @@ struct ft5x06_data *ft5x06_probe(struct device *dev,
 		goto err_put_vkeys;
 	}
 
-#if defined(CONFIG_FB)
-	 ft5x06->fb_notif.notifier_call = fb_notifier_callback;
-	 error = fb_register_client(&ft5x06->fb_notif);
-	 if (error)
-		 dev_err(dev, "Unable to register fb_notifier: %d\n", error);
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
+#ifdef CONFIG_HAS_EARLYSUSPEND
 	ft5x06->early_suspend.level   = EARLY_SUSPEND_LEVEL_BLANK_SCREEN+1;
 	ft5x06->early_suspend.suspend = ft5x06_early_suspend;
 	ft5x06->early_suspend.resume  = ft5x06_early_resume;

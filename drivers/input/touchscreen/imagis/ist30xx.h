@@ -275,7 +275,6 @@ struct ist30xx_tags {
 };
 
 #include "ist30xx_tsp.h"
-#include <linux/earlysuspend.h>
 #include <linux/power_supply.h>
 
 struct ist30xx_config_info {
@@ -432,7 +431,6 @@ typedef struct _CMCS_BUF {
 struct ist30xx_data {
 	struct i2c_client *		client;
 	struct input_dev *		input_dev;
-	struct early_suspend		early_suspend;
 	struct ist30xx_status		status;
 	struct ist30xx_fw		fw;
 	struct ist30xx_tags		tags;
@@ -554,6 +552,6 @@ int ist30xx_reset(struct ist30xx_data *data, bool download);
 int ist30xx_internal_suspend(struct ist30xx_data *data);
 int ist30xx_internal_resume(struct ist30xx_data *data);
 
-int __devinit ist30xx_init_system(struct ist30xx_data *data);
+int ist30xx_init_system(struct ist30xx_data *data);
 
 #endif  // __IST30XX_H__

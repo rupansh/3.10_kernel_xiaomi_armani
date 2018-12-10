@@ -1323,7 +1323,7 @@ static int ist30xx_parse_dt(struct device *dev, struct ist30xx_platform_data *pd
 }
 #endif
 
-static int __devinit ist30xx_probe(struct i2c_client *		client,
+static int ist30xx_probe(struct i2c_client *		client,
 				   const struct i2c_device_id * id)
 {
 	int ret;
@@ -1502,7 +1502,7 @@ static int __devinit ist30xx_probe(struct i2c_client *		client,
 
 	data->status.event_mode = false;
 
-	input_mt_init_slots(input_dev, IST30XX_MAX_MT_FINGERS);
+	input_mt_init_slots(input_dev, IST30XX_MAX_MT_FINGERS, 0);
 
 	input_dev->name = "ist30xx";
 	input_dev->id.bustype = BUS_I2C;
@@ -1607,7 +1607,7 @@ err_alloc_dev:
 }
 
 
-static int __devexit ist30xx_remove(struct i2c_client *client)
+static int ist30xx_remove(struct i2c_client *client)
 {
 	struct ist30xx_data *data = i2c_get_clientdata(client);
 
@@ -1652,7 +1652,7 @@ static struct of_device_id ist30xx_match_table[] = {
 static struct i2c_driver ist30xx_i2c_driver = {
 	.id_table		= ist30xx_idtable,
 	.probe			= ist30xx_probe,
-	.remove			= __devexit_p(ist30xx_remove),
+	.remove			= ist30xx_remove,
 	.driver			= {
 		.owner		= THIS_MODULE,
 		.name		= IST30XX_DEV_NAME,
