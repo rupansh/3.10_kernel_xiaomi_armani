@@ -25,12 +25,17 @@
 #include <linux/delay.h>
 #include <linux/qpnp/power-on.h>
 #include <linux/of_address.h>
+#include <linux/irqreturn.h>
 
 #include <asm/cacheflush.h>
 #include <asm/system_misc.h>
 
 #include <soc/qcom/scm.h>
 #include <soc/qcom/restart.h>
+
+#include <linux/mfd/pm8xxx/misc.h>
+
+#include <../../../arch/arm/mach-msm/timer.h>
 
 #define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
 #define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
@@ -42,12 +47,33 @@
 #define SCM_EDLOAD_MODE			0X01
 #define SCM_DLOAD_CMD			0x10
 
+#define MSM_TLMM_BASE		IOMEM(0xFA017000)	/* 16K	*/
+#define PSHOLD_CTL_SU (MSM_TLMM_BASE + 0x820)
+#define MSM_MPM2_PSHOLD_BASE	IOMEM(0xFA107000)	/*  4k */
+
+#define MSM_IMEM_BASE		IOMEM(0xFA00A000)	/*  4K	*/
+
+#define RESTART_REASON_ADDR 0x65C
+
+#ifdef CONFIG_MSM_WATCHDOG
+void pet_watchdog(void);
+#else
+static inline void pet_watchdog(void) { }
+#endif
+
+#ifdef CONFIG_MSM_RESTART_V2
+#define use_restart_v2()	1
+#else
+#define use_restart_v2()	0
+#endif
 
 static int restart_mode;
 void *restart_reason;
 static bool scm_pmic_arbiter_disable_supported;
 /* Download mode master kill-switch */
 static void __iomem *msm_ps_hold;
+
+static void __iomem *msm_tmr0_base;
 
 #ifdef CONFIG_MSM_DLOAD_MODE
 #define EDL_MODE_PROP "qcom,msm-imem-emergency_download_mode"
