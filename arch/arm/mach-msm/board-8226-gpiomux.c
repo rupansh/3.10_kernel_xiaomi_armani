@@ -232,6 +232,7 @@ static struct gpiomux_setting lcd_te_sus_cfg = {
 	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_DOWN,
 	.dir = GPIOMUX_IN,
+};
 
 static struct gpiomux_setting lcd_bl_hwen_act_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
