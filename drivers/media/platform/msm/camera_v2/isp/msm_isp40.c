@@ -36,8 +36,11 @@
 #define VFE40_8x26V2_VERSION 0x20010014
 
 #define VFE40_BURST_LEN 1
+#define VFE40_BURST_LEN_8916_VERSION 2
 #define VFE40_STATS_BURST_LEN 1
+#define VFE40_STATS_BURST_LEN_8916_VERSION 2
 #define VFE40_UB_SIZE 1536
+#define VFE40_UB_SIZE_8916 2048 /* 2048 * 128 bits = 32KB */
 #define VFE40_EQUAL_SLICE_UB 228
 #define VFE40_WM_BASE(idx) (0x6C + 0x24 * idx)
 #define VFE40_RDI_BASE(idx) (0x2E8 + 0x4 * idx)
@@ -1153,6 +1156,9 @@ static void msm_vfe40_axi_clear_wm_xbar_reg(
 	msm_camera_io_w(xbar_reg_cfg,
 		vfe_dev->vfe_base + VFE40_XBAR_BASE(wm));
 }
+
+
+#define MSM_ISP40_TOTAL_WM_UB 819
 
 static void msm_vfe40_cfg_axi_ub_equal_default(
 	struct vfe_device *vfe_dev)
